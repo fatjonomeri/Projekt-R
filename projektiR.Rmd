@@ -1,0 +1,334 @@
+---
+title: "Bachelor në Inxhinieri Matematike dhe Informatike -2"
+subtitle: "Projekt në R: "
+author: 'Studenti: Fatjon Omeri  Pedagogu:Lule Basha'
+date: '2022-06-17'
+output: html_document
+---
+
+
+```{r,  echo=FALSE}
+colorize <- function(x, color) {
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color,
+      x)
+  } else x
+}
+```
+
+## Projekti final {.tabset}
+### Hyrje
+Ky projekt ka si qellim analizimin e nje databaze me 100 hyrje mbi llojet e ndryshme te duhanit qe prodhohet dhe importohet ne US duke perdorur softwaret R dhe RStudio.
+
+Librarite qe jane perodur ne kete studim
+```{r}
+#*User libraries**
+#library(xlsx)
+#library(dplyr)
+#library(ggplot2)
+#library(hrbrthemes)
+#library(stringr)
+#library(tibble)
+#library(knitr)
+
+#*system libraries*
+#library(utils)
+#library(stats)
+#library(methods)
+#library(grDevices)
+#library(base)
+#library(graphics)
+```
+
+
+### `r colorize("Perpunimi i te dhenave","blue")`
+`r colorize("Importimi i te dhenave ne R","blue")`
+```{r}
+library(readxl)
+df <- read_excel("C:\\Users\\Hp\\Documents\\Te_dhena_per_projekt.xlsx", sheet = "Projekt 24")
+```
+
+
+Ndryshojme emrat e kolonave qe kane hapesire ne mes te fjaleve per te mos patur errore gjate perpunimit te te dhenave dhe ndertimit te grafikeve
+```{r}
+library(stringr)
+names(df) <-str_replace_all(names(df),c(" "= "_"))
+```
+
+
+
+Meqenese duhani i djegshem (combustible) mund te matet ne 'pounds' dhe ne numer cigaresh ne varesi te nenllojit, do te ishte mire ti kthenim te gjitha te dhenat ne pounds, ne menyre qe te mund ti krahasojme me duhanin e padjegshem (noncombustible). Sipas te dhenave ne web marim mesataren e permbajtjes se duhanit te llojeve te ndryshme si cigare apo puro, e cila eshte 0.004 pounds per cigare. 
+
+
+```{r}
+library(dplyr)
+df <- df%>%mutate(Totali_Pounds = if_else(Data_Value_Unit=='Pounds', as.numeric(Total),as.numeric(Total)*0.004))
+df <- df%>%mutate(Domestic_Pounds = if_else(Data_Value_Unit=='Pounds', as.numeric(Domestic),as.numeric(Domestic)*0.004))
+df <- df%>%mutate(Imports_Pounds = if_else(Data_Value_Unit=='Pounds', as.numeric(Imports),as.numeric(Imports)*0.004))
+```
+
+Shohim qe ne te dhenat e tabeles kemi edhe nje qelize "All combustibles" qe permbledh te gjitha te dhenat e duhanit te djegshem ne vit dhe i liston si ekuivalente cigaresh. Kete rresht mund ta heqim nga tabela pasi llogarite do ti bejme ne pound.
+
+```{r}
+df <- df[!grepl('All Combustibles',df$Measure),]
+```
+
+
+### `r colorize("Analiza e te dhenave 1","green")`
+`r colorize("**Ne kete tab do te analizojme lidhjen midis duhanit te djegshem dhe te padjegshem si dhe ndryshimin e tyre pergjate viteve.**","green")`
+
+Si fillim nxjerrim shumen ne pound te secilit lloj ne total pergjat te gjithe viteve:
+```{r}
+comb = sum(df[which(df$Topic=='Combustible Tobacco'), 15])
+noncomb = sum(df[which(df$Topic=='Noncombustible Tobacco'), 15])
+```
+
+Me keto te dhena mund te ndertojme nje grafik rrethor dhe me shtylla per ta patur te qarte nga ana vizuale raportin e tyre.
+
+```{r}
+library(ggplot2)
+data <- data.frame(group=c("Combustible","Noncombustible"),value=c(comb,noncomb))
+data <- data%>%arrange(desc(group))%>%mutate(prop=value/sum(data$value)*100)%>%mutate(ypos=cumsum(prop)-0.5*prop)
+ggplot(data, aes(x="", y=prop, fill=group))+geom_bar(stat="identity", width=1, color="black")+coord_polar("y", start=0) + theme_void()+theme(legend.position = "none")+geom_text(aes(y=ypos, label=group), color="white",size=3)+labs(title="Grafiku rrethor i raportit te llojeve te duhanit")
+```
+```{r}
+p<-ggplot(data=data, aes(x=group, y=value)) + geom_bar(stat="identity")+labs(x = "Lloji i duhanit",y = "Shuma",title = "Grafiku me shtylla i lojit te duhanit")
+p
+```
+Nga dy grafiket duket qarte se lloji i duhanit qe prodhohet dhe rrjedhimisht konsumohet me shume eshte ai i djegshem.
+
+Shohim sesi esht raporti i tyre nder vite.
+
+```{r}
+#Gjejme totalin e secilit lloj ne cdo vit
+library(dplyr)
+df <- df%>%group_by(Year,Topic)%>%mutate(cum_topic = cumsum(Totali_Pounds))
+```
+
+```{r}
+ggplot(df, aes(x = Topic)) +geom_bar(fill = "blue",color="black") +labs(x = "Lloji i duhanit",y = "Shuma",title = "Grafiku me shtylla i lojit te duhanit")+facet_wrap(~Year, scale="free", ncol = 2, nrow = 4)
+```
+
+Edhe nga keto grafike per 8 vite dallohet nje dominim i tregut nga duhani i djegshem (per vitin 2009 mungojne te dhenat per duhanin e padjegshem ne databaze).
+
+Ndryshimi nder vite i llojeve te duhanit.
+
+```{r}
+#ndertojme nje dataframe me perqindjen qe ze duhani i djegshem ne sasine totale te duhanit cdo vit
+years = c(2009,2010,2011,2012,2013,2014,2015,2016)
+b1=sum(df[which(df$Topic=='Combustible Tobacco' & df$Year == 2009), 15])/sum(df[which(df$Year==2009),15])*100
+b2=sum(df[which(df$Topic=='Combustible Tobacco' & df$Year == 2010), 15])/sum(df[which(df$Year==2010),15])*100
+b3=sum(df[which(df$Topic=='Combustible Tobacco' & df$Year == 2011), 15])/sum(df[which(df$Year==2011),15])*100
+b4=sum(df[which(df$Topic=='Combustible Tobacco' & df$Year == 2012), 15])/sum(df[which(df$Year==2012),15])*100
+b5=sum(df[which(df$Topic=='Combustible Tobacco' & df$Year == 2013), 15])/sum(df[which(df$Year==2013),15])*100
+b6=sum(df[which(df$Topic=='Combustible Tobacco' & df$Year == 2014), 15])/sum(df[which(df$Year==2014),15])*100
+b7=sum(df[which(df$Topic=='Combustible Tobacco' & df$Year == 2015), 15])/sum(df[which(df$Year==2015),15])*100
+b8=sum(df[which(df$Topic=='Combustible Tobacco' & df$Year == 2016), 15])/sum(df[which(df$Year==2016),15])*100
+perqindja = c(b1,b2,b3,b4,b5,b6,b7,b8)
+
+combustible = data.frame(years, perqindja)
+combustible
+```
+
+```{r warning=FALSE}
+library(hrbrthemes)
+ggplot(data=combustible, aes(x=years, y=perqindja, group=1)) +geom_line(size = 1.5,
+
+color = "lightgray")+geom_point(shape=21,
+
+color = "black", fill="69b3a2", size=2)+theme_ipsum()+labs(y ="Combustible tobacco(%).",
+x = "Years",
+title = "Ndryshimi i perdorimit te")+
+scale_y_continuous(expand=c(0,0),limits =c(80,100))
+```
+Grafiku tregon nje vije pothuajse lineare (pervec vitit te pare) me nje renie te lehte ne vitet e fundit, gjithsesi duhani i djegshem duket se do te vazhdoje te perbeje mbi 90% te prodhimit edhe per shume vite te ardhshme.
+
+Bejme te njejten gje per duhanin e padjegshem.
+```{r}
+years = c(2009,2010,2011,2012,2013,2014,2015,2016)
+nc1=0
+nc2=sum(df[which(df$Topic=='Noncombustible Tobacco' & df$Year == 2010), 15])/sum(df[which(df$Year==2010),15])*100
+nc3=sum(df[which(df$Topic=='Noncombustible Tobacco' & df$Year == 2011), 15])/sum(df[which(df$Year==2011),15])*100
+nc4=sum(df[which(df$Topic=='Noncombustible Tobacco' & df$Year == 2012), 15])/sum(df[which(df$Year==2012),15])*100
+nc5=sum(df[which(df$Topic=='Noncombustible Tobacco' & df$Year == 2013), 15])/sum(df[which(df$Year==2013),15])*100
+nc6=sum(df[which(df$Topic=='Noncombustible Tobacco' & df$Year == 2014), 15])/sum(df[which(df$Year==2014),15])*100
+nc7=sum(df[which(df$Topic=='Noncombustible Tobacco' & df$Year == 2015), 15])/sum(df[which(df$Year==2015),15])*100
+nc8=sum(df[which(df$Topic=='Noncombustible Tobacco' & df$Year == 2016), 15])/sum(df[which(df$Year==2016),15])*100
+perqindja = c(nc1,nc2,nc3,nc4,nc5,nc6,nc7,nc8)
+
+noncombustible = data.frame(years, perqindja)
+noncombustible
+
+```
+
+```{r warning=FALSE}
+ggplot(data=noncombustible, aes(x=years, y=perqindja, group=1)) +geom_line(size = 1.5,
+
+color = "lightgray")+geom_point(shape=21,
+
+color = "black", fill="69b3a2", size=2)+theme_ipsum()+labs(y ="Noncombustible tobacco(%).",
+x = "Years",
+title = "Ndryshimi i perdorimit te")+
+scale_y_continuous(expand=c(0,0),limits =c(0,30))
+```
+Shohim te njejten gje si ne rastin e pare, vetem se ne kete rast jemi ne "dyshemene" e grafikut, duhani i padjegshem nuk eshte ende popullor megjithese vitet e fundit duket nje rritje e lehte e prodhimit te tij.
+
+### `r colorize("Analiza e te dhenave 2","orange")`
+`r colorize("Ne kete tab do te analizojme prodhimit e nenllojeve te duhanit.","red")`
+
+E nisim me cigaret normale:
+
+```{r}
+#gjejme shumen e cigareve totale te prodhuara cdo vit dhe i vendosim ne nje dataframe
+years = c(2009,2010,2011,2012,2013,2014,2015,2016)
+cg1= sum(df[which(df$Measure=='Cigarettes' & df$Year == 2009), 11])
+cg2= sum(df[which(df$Measure=='Cigarettes' & df$Year == 2010), 11])
+cg3 = sum(df[which(df$Measure=='Cigarettes' & df$Year == 2011), 11])
+cg4 = sum(df[which(df$Measure=='Cigarettes' & df$Year == 2012), 11])
+cg5 = sum(df[which(df$Measure=='Cigarettes' & df$Year == 2013), 11])
+cg6 = sum(df[which(df$Measure=='Cigarettes' & df$Year == 2014), 11])
+cg7 = sum(df[which(df$Measure=='Cigarettes' & df$Year == 2015), 11])
+cg8 = sum(df[which(df$Measure=='Cigarettes' & df$Year == 2016), 11])
+cigrt = c(cg1,cg2,cg3,cg4,cg5,cg6,cg7,cg8)
+cigarettes = data.frame(years,cigrt)
+cigarettes
+```
+```{r warning=FALSE}
+ggplot(data=cigarettes, aes(x=years, y=cigrt, group=1)) +geom_line(size = 1.5,
+
+color = "lightgray")+geom_point(shape=21,
+
+color = "black", fill="69b3a2", size=2)+theme_ipsum()+labs(y ="Numri i cigareve.",
+x = "Years",
+title = "Ndryshimi i konsumit te cigareve")+
+scale_y_continuous(expand=c(0,0),limits =c(200000000000,350000000000))
+```
+Nga grafiku shohim nje renie te vazhdueshme cdo vit te numrit te cigareve normale te prodhuara, edhe pse cigaret normale zene peshen me te madhe ne treg. Shohim nese kjo vjen si pasoje e rritjes se parapelqimit per llojet e tjera.
+
+
+```{r}
+years = c(2010,2011,2012,2013,2014,2015,2016)
+sl2= sum(df[which(df$Measure=='Smokeless Tobacco' & df$Year == 2010), 11])
+sl3 = sum(df[which(df$Measure=='Smokeless Tobacco' & df$Year == 2011), 11])
+sl4 = sum(df[which(df$Measure=='Smokeless Tobacco' & df$Year == 2012), 11])
+sl5 = sum(df[which(df$Measure=='Smokeless Tobacco' & df$Year == 2013), 11])
+sl6 = sum(df[which(df$Measure=='Smokeless Tobacco' & df$Year == 2014), 11])
+sl7 = sum(df[which(df$Measure=='Smokeless Tobacco' & df$Year == 2015), 11])
+sl8 = sum(df[which(df$Measure=='Smokeless Tobacco' & df$Year == 2016), 11])
+smless = c(sl2,sl3,sl4,sl5,sl6,sl7,sl8)
+smokeless = data.frame(years,smless)
+smokeless
+```
+
+```{r warning=FALSE}
+ggplot(data=smokeless, aes(x=years, y=smless, group=1)) +geom_line(size = 1.5,
+
+color = "lightgray")+geom_point(shape=21,
+
+color = "black", fill="69b3a2", size=2)+theme_ipsum()+labs(y ="Pesha e duhanit pa tym.",
+x = "Years",
+title = "Ndryshimi i konsumit te duhanit pa tym")+
+scale_y_continuous(expand=c(0,0),limits =c(110000000,150000000))
+```
+Nga grafiku shohim nje rritje ne numrin e duhanit pa tym te prodhuar vitet e fundit, kjo esht ne perputhje me rritjen qe pame ne grafikun e duhanit te padjegshem.
+
+```{r}
+years = c(2009,2010,2011,2012,2013,2014,2015)
+cr1 = sum(df[which(df$Measure=='Cigars' & df$Year == 2009), 11])
+cr2= sum(df[which(df$Measure=='Cigars' & df$Year == 2010), 11])
+cr3 = sum(df[which(df$Measure=='Cigars' & df$Year == 2011), 11])
+cr4 = sum(df[which(df$Measure=='Cigars' & df$Year == 2012), 11])
+cr5 = sum(df[which(df$Measure=='Cigars' & df$Year == 2013), 11])
+cr6 = sum(df[which(df$Measure=='Cigars' & df$Year == 2014), 11])
+cr7 = sum(df[which(df$Measure=='Cigars' & df$Year == 2015), 11])
+cgrs = c(cr1,cr2,cr3,cr4,cr5,cr6,cr7)
+cigars = data.frame(years,cgrs)
+cigars
+```
+```{r warning=FALSE}
+ggplot(data=cigars, aes(x=years, y=cgrs, group=1)) +geom_line(size = 1.5,
+
+color = "lightgray")+geom_point(shape=21,
+
+color = "black", fill="69b3a2", size=2)+theme_ipsum()+labs(y ="Numri i purove.",
+x = "Years",
+title = "Ndryshimi i konsumit te purove")+
+scale_y_continuous(expand=c(0,0),limits =c(10000000000,40000000000))
+```
+Nga ky grafik mund te themi se prodhimi dhe konsumi i purove ka qene konstant ne vitet e fundit, duke treguar se ka nje grup konsumatoresh mjaft besnike.
+
+```{r}
+years = c(2009,2010,2011,2012,2013,2014,2015,2016)
+lt1 = sum(df[which(df$Measure=='Loose Tobacco' & df$Year == 2009), 11])
+lt2= sum(df[which(df$Measure=='Loose Tobacco' & df$Year == 2010), 11])
+lt3 = sum(df[which(df$Measure=='Loose Tobacco' & df$Year == 2011), 11])
+lt4 = sum(df[which(df$Measure=='Loose Tobacco' & df$Year == 2012), 11])
+lt5 = sum(df[which(df$Measure=='Loose Tobacco' & df$Year == 2013), 11])
+lt6 = sum(df[which(df$Measure=='Loose Tobacco' & df$Year == 2014), 11])
+lt7 = sum(df[which(df$Measure=='Loose Tobacco' & df$Year == 2015), 11])
+lt8 = sum(df[which(df$Measure=='Loose Tobacco' & df$Year == 2016), 11])
+loose = c(lt1,lt2,lt3,lt4,lt5,lt6,lt7,lt8)
+loose_tbc = data.frame(years,loose)
+loose_tbc
+```
+```{r warning=FALSE}
+ggplot(data=loose_tbc, aes(x=years, y=loose, group=1)) +geom_line(size = 1.5,
+
+color = "gray")+geom_point(shape=21,
+
+color = "black", fill="69b3a2", size=2)+theme_ipsum() +labs(y ="Pesha e loose tobacco",
+x = "Years",
+title = "Ndryshimi i konsumit te  loose tobacco")+
+scale_y_continuous(expand=c(0,0),limits =c(15000000000,50000000000))
+```
+
+Nga grafiku mund te shihet nje rritje e theksueshme e prodhimit te duhanit te dredhur ne vitet e fundit. Mund te themi se eshte ne raport te zhdrejte me cigaret normale, kjo mund te vije si pasoje e faktoreve te ndryshem, nje nder ta edhe kostoja me e lire.
+
+Ndertojme nje grafik me shtylla per te pare peshen qe ze secili nenlloj ne treg.
+```{r}
+#krijojme nje vektor me emrat e nenllojeve
+nenllojet = c('Loose Tobacco','Cigarettes','Cigars','Smokeless Tobacco')
+
+#gjejme shumen e secilit nenlloj ne total gjate gjithe viteve
+lt = sum(df[which(df$Measure=='Loose Tobacco'), 15])
+cr = sum(df[which(df$Measure=='Cigarettes'), 15])
+cg = sum(df[which(df$Measure=='Cigars'), 15])
+st = sum(df[which(df$Measure=='Smokeless Tobacco'), 15])
+dg = c(lt,cr,cg,st)
+dtf = data.frame(nenllojet,dg)
+dtf
+
+```
+
+```{r}
+ggplot(dtf, aes(x=nenllojet, y=dg)) + geom_bar(stat="identity", width=.5, fill="#D35400") + labs(title="Nenllojet") + xlab("Nnellojet") + ylab("Pesha") + theme(axis.text.x = element_text(angle=65, vjust=0.6))
+```
+
+Dallohet qarte dominimi i cigareve normale ne treg ne krahasim me te gjitha llojet e tjera se bashku. Kjo ishte e pritshme pasi cigaret normale konsumohen rendomte ne publik nga te gjitha moshat dhe jane bere pjese e pandashme e atyre qe i konsumojne. Ndryshe nga llojet e tjera te cilat jane me te rezervuara per tu konsumuar, per shkak te sasise se duhanit por edhe cmimit.
+
+
+### `r colorize("Perfundimet","pink")`
+`r colorize("Perfundime","red")`
+Ne perfundim te ketij projekti u arrit te analizoheshin te dhenat e databazes se dhene, duke dale ne disa konkluzione te rendesishme mbi prodhimin dhe konsumin e duhanit ne US. Pame se lloji i duhanit qe dominon tregun eshte ai i djegshmi, pasi ka me tradite dhe eshte me i reklamuar nder vite prandaj njerezit e njohin me mire dhe priren drejt konsumit te tij. Megjithate nuk do te ishte e habitshme nese mbas disa vitesh raportet do te ndryshojne duke pare rritjen e lehte ne vitet e fundit te duhanit te padjegshem. Nga nenllojet ishte e pritshme sasia e larte e cigareve normale qe konsumohen krahasuar me te gjitha nenllojet e tjera.
+
+Do te jete interesante vazhdimi i ketij studimi ne vitet e ardhshme per te pare nese do te kete nje ndryshim te raporteve te sinjalizuara nga ky studim. Do te ishte e rendesishme perfshirja e faktoreve te tjere ne studim te cilet mungonin ne kete databaze, si per shembull te dhenat e plota per secilin vit, apo edhe te dhena shtese si cmimi, fitimi ose lidhja me pasojat qe shkakton konsumi i duhanit.
+
+
+
+### `r colorize("Referencat","red")`
+`r colorize("Referenca:","pink")`
+
+https://www.cdc.gov/mmwr/preview/mmwrhtml/mm6130a1.htm#tab2
+https://r-graph-gallery.com/piechart-ggplot2.html
+https://r-graph-gallery.com/connected_scatterplot_ggplot2.html
+http://www.sthda.com/english/wiki/ggplot2-barplots-quick-start-guide-r-software-and-data-visualization
+https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4127802/
+https://tobaccocontrol.bmj.com/content/7/2/168
+https://statisticsglobe.com/cumsum-r-function-explained/
+https://stackoverflow.com/questions/22127342/how-to-remove-rows-in-a-dataframe-that-contain-certain-words-in-r
+https://stackoverflow.com/questions/72227607/how-to-adjust-the-ratio-of-my-x-axis-in-my-line-graph-in-r
+https://dplyr.tidyverse.org/reference/group_by.html
+https://www.rdocumentation.org/packages/ggplot2/versions/3.3.6/topics/facet_wrap
+Hyrje ne statistiken e zbatuar 3 - Llukan Puka
